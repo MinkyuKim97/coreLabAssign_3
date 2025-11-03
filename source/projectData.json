@@ -1,0 +1,91 @@
+{
+  "name": "Satellite Tacking Station",
+  "date": "Feb 22 2026",
+  "time": "",
+  "value": "Focusing on an efficiency to build tracking station",
+  "children": [
+    {
+      "name": "Research",
+      "date": "Nov 10 2025",
+      "time": "16:00",
+      "value": "Researching hardware and software requirements",
+      "children": [
+        {
+          "name": "Hardware",
+          "date": "Nov 8 2025",
+          "time": "",
+          "value": "Check possible hardware options",
+          "children": [
+            {
+              "name": "2-Axis robot arm",
+              "date": "Nov 7 2025",
+              "time": "16:00",
+              "value": "Using 2-Axis robot arm with a high torque adjusted motor",
+              "children": []
+            },
+            {
+              "name": "Hemisphere antenna",
+              "date": "Nov 6 2025",
+              "time": "",
+              "value": "Hemisphere shape with a moving axis",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Prototype Fabrication",
+      "date": "Dec 20 2025",
+      "time": "18:50",
+      "value": "Building prototype",
+      "children": [
+        {
+          "name": "3D printing",
+          "date": "Dec 10 2025",
+          "time": "18:50",
+          "value": "3D printing the parts",
+          "children": [
+            {
+              "name": "Planetary gear",
+              "date": "Dec 8 2025",
+              "time": "",
+              "value": "2 for each axis, additional 1 for base",
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "Base Plate Assembly",
+          "date": "Dec 5 2025",
+          "time": "18:50",
+          "value": "Find base plate which can handle the momentom weight",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Software Development",
+      "date": "Jan 15 2026",
+      "time": "12:30",
+      "value": "Software side dev",
+      "children": [
+        {
+          "name": "Satellite Coordination Data",
+          "date": "Jan 12 2026",
+          "time": "18:30",
+          "value": "Using API, premade JSON to track satellite position",
+          "children": []
+        },
+        {
+          "name": "Applying Input and tracking with head",
+          "date": "Jan 14 2026",
+          "time": "",
+          "value": "Use input data to track data",
+          "children": []
+        }
+        
+      ]
+    }
+  ]
+}

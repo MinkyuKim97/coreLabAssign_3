@@ -1,0 +1,41 @@
+:root {
+    font-family: sans-serif;
+}
+
+#editor {
+    width: 800px;
+    margin: 20px auto;
+}
+
+#editor .scheme {
+    height: 200px;
+    width: 100%;
+    display: flex;
+}
+
+#editor .swatch {
+    flex: 1;
+    position: relative;
+}
+
+#editor .swatch .delete {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+
+#editor .swatch label {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 0 3px #00000055;
+}
+
+#editor .swatch .picker {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    width: calc(100% - 20px);
+}
