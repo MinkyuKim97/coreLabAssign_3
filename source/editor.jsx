@@ -10,7 +10,6 @@ window.addEventListener("load", async () => {
 });
 
 function Editor() {
-  // ==== load initial (from localStorage -> fallback to json) ====
   const loadInitial = () => {
     try {
       const raw = localStorage.getItem("treeData_v1");
@@ -33,39 +32,29 @@ function Editor() {
     value: initial.value ?? "",
   });
   const [children, setChildren] = useState(initial.children ?? []);
-
-  // auto-save to localStorage
   useEffect(() => {
     const data = { name: projectName, ...rootMeta, children };
     localStorage.setItem("treeData_v1", JSON.stringify(data));
   }, [projectName, rootMeta, children]);
 
-  // ===== Node spacing =====
   const [nodeGapY, setNodeGapY] = useState(140);
   const [nodeGapX, setNodeGapX] = useState(360);
-
-  // ===== Selection =====
   const [selectedId, setSelectedId] = useState(null);
-
-  // ===== Sidebar toggle & width (vw) =====
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarVW, setSidebarVW] = useState(20); // 12~40 권장
+  const [sidebarVW, setSidebarVW] = useState(20);
 
-  // ===== Viewport & Stage =====
   const viewportRef = useRef(null);
   const isPanningRef = useRef(false);
   const panRef = useRef({ startX: 0, startY: 0, startLeft: 0, startTop: 0 });
   const initialCenterRef = useRef({ left: 0, top: 0 });
   const hasAutoCenteredRef = useRef(false);
 
-  // ===== Zoom =====
   const [zoom, setZoom] = useState(1);
   const MIN_ZOOM = 0.4;
   const MAX_ZOOM = 3.0;
   const gestureRef = useRef({ startZoom: 1 });
   const isPointerOverViewportRef = useRef(false);
 
-  // ===== measure viewport size =====
   const [vpSize, setVpSize] = useState({ w: 0, h: 0 });
   const measureViewport = () => {
     const vp = viewportRef.current;
@@ -77,12 +66,10 @@ function Editor() {
     window.addEventListener("resize", measureViewport);
     return () => window.removeEventListener("resize", measureViewport);
   }, []);
-  // 패널 열기/닫기, 패널 너비 변경 시에도 재측정
   useEffect(() => {
     requestAnimationFrame(measureViewport);
   }, [sidebarOpen, sidebarVW]);
 
-  // ===== Helpers =====
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
   const parsePathToIndices = (id) =>
@@ -120,16 +107,33 @@ function Editor() {
     });
   };
 
+  const removeNodeImmutable = (arr, indices) => {
+    if (!Array.isArray(arr)) return arr;
+    if (indices.length === 0) return arr;
+    const [i, ...rest] = indices;
+    if (i < 0 || i >= arr.length) return arr;
+    if (rest.length === 0) {
+      return arr.filter((_, idx) => idx !== i);
+    } else {
+      return arr.map((child, idx) => {
+        if (idx !== i) return child;
+        const nextChildren = removeNodeImmutable(child.children ?? [], rest);
+        return { ...child, children: nextChildren };
+      });
+    }
+  };
+
   const handleAddChildAt = (nodeId) => {
     const indices = parsePathToIndices(nodeId);
-    const newChild = {
-      name: "New",
-      date: "",
-      time: "",
-      value: "",
-      children: [],
-    };
+    const newChild = { name: "New", date: "", time: "", value: "", children: [] };
     setChildren((prev) => addChildImmutable(prev, indices, newChild));
+  };
+
+  const handleDeleteNode = (nodeId) => {
+    if (nodeId === "r") return;
+    const indices = parsePathToIndices(nodeId);
+    setChildren((prev) => removeNodeImmutable(prev, indices));
+    setSelectedId(null);
   };
 
   const setNodeField = (nodeId, field, value) => {
@@ -142,7 +146,6 @@ function Editor() {
     setChildren((prev) => updateNodeImmutable(prev, indices, { [field]: value }));
   };
 
-  // ===== D3 layout + path IDs =====
   const layout = useMemo(() => {
     const root = d3.hierarchy({ name: projectName, ...rootMeta, children });
     root.id = "r";
@@ -152,35 +155,24 @@ function Editor() {
         n.id = `${n.parent.id}.${i}`;
       }
     });
-
-    const tree = d3
-      .tree()
-      .nodeSize([nodeGapY, nodeGapX])
-      .separation((a, b) => (a.parent === b.parent ? 1.8 : 3.0));
-
+    const tree = d3.tree().nodeSize([nodeGapY, nodeGapX]).separation((a, b) => (a.parent === b.parent ? 1.8 : 3.0));
     const laid = tree(root);
     const nodes = laid.descendants();
     const links = laid.links();
-
     const minX = Math.min(...nodes.map((n) => n.x));
     const maxX = Math.max(...nodes.map((n) => n.x));
     const minY = Math.min(...nodes.map((n) => n.y));
     const maxY = Math.max(...nodes.map((n) => n.y));
     const pad = 48;
-
     const contentW = maxY - minY + pad * 2;
     const contentH = maxX - minX + pad * 2;
-
     const baseX = (n) => n.y - minY + pad;
     const baseY = (n) => n.x - minX + pad;
-
     const rootNode = nodes.find((n) => n.depth === 0) ?? nodes[0];
     const nodeIndex = new Map(nodes.map((n) => [n.id, n]));
-
     return { nodes, links, contentW, contentH, baseX, baseY, rootNode, nodeIndex, root };
   }, [projectName, rootMeta, children, nodeGapY, nodeGapX]);
 
-  // ===== Stage geometry (with zoom) =====
   const stagePadX = Math.max(0, Math.round(vpSize.w * 0.5));
   const stagePadY = Math.max(0, Math.round(vpSize.h * 0.5));
   const stageW = layout.contentW + stagePadX * 2;
@@ -193,12 +185,12 @@ function Editor() {
   const scaledX = (n, atZoom = zoom) => atZoom * stageX(n);
   const scaledY = (n, atZoom = zoom) => atZoom * stageY(n);
 
-  // ===== Center helpers =====
   const clampScroll = (vp, left, top, atZoom) => {
-    const maxL = Math.max(0, (stageW * atZoom) - vp.clientWidth);
-    const maxT = Math.max(0, (stageH * atZoom) - vp.clientHeight);
+    const maxL = Math.max(0, stageW * atZoom - vp.clientWidth);
+    const maxT = Math.max(0, stageH * atZoom - vp.clientHeight);
     return { left: clamp(left, 0, maxL), top: clamp(top, 0, maxT) };
-    };
+  };
+
   const centerToNode = (node, opts = { behavior: "auto" }) => {
     const vp = viewportRef.current;
     if (!vp || !node) return;
@@ -223,15 +215,13 @@ function Editor() {
     });
   };
 
-  // 최초 1회 자동 센터
   useEffect(() => {
     if (hasAutoCenteredRef.current) return;
     if (vpSize.w === 0 || vpSize.h === 0) return;
     centerToNode(layout.rootNode);
     hasAutoCenteredRef.current = true;
-  }, [vpSize.w, vpSize.h, layout.rootNode]); // eslint-disable-line
+  }, [vpSize.w, vpSize.h, layout.rootNode]);
 
-  // ===== Panning / empty click = deselect =====
   const onMouseDown = (e) => {
     if (e.button !== 0) return;
     if (e.target.closest(".node-card") || e.target.closest(".side-panel") || e.target.closest(".panel-toggle")) return;
@@ -252,44 +242,38 @@ function Editor() {
     const dx = e.clientX - panRef.current.startX;
     const dy = e.clientY - panRef.current.startY;
     vp.scrollLeft = panRef.current.startLeft - dx;
-    vp.scrollTop  = panRef.current.startTop - dy;
+    vp.scrollTop = panRef.current.startTop - dy;
   };
-  const endPan = () => { isPanningRef.current = false; };
+  const endPan = () => {
+    isPanningRef.current = false;
+  };
 
-  // ===== Zoom (wheel + pinch) =====
   const zoomAroundPointer = (clientX, clientY, factor) => {
     const vp = viewportRef.current;
     if (!vp) return;
-
     const prev = zoom;
     const next = clamp(prev * factor, MIN_ZOOM, MAX_ZOOM);
     if (next === prev) return;
-
     const rect = vp.getBoundingClientRect();
     const screenX = clientX - rect.left;
     const screenY = clientY - rect.top;
-
     const offsetX = vp.scrollLeft + screenX;
     const offsetY = vp.scrollTop + screenY;
-
     const contentX = offsetX / prev;
     const contentY = offsetY / prev;
-
     const newOffsetX = contentX * next;
     const newOffsetY = contentY * next;
-
     const { left, top } = clampScroll(vp, newOffsetX - screenX, newOffsetY - screenY, next);
-
     setZoom(next);
     requestAnimationFrame(() => {
       vp.scrollLeft = left;
-      vp.scrollTop  = top;
+      vp.scrollTop = top;
     });
   };
 
   const onWheel = (e) => {
-    const isPinch = e.ctrlKey || e.metaKey; // trackpad pinch
-    const wantsMouseZoom = e.shiftKey;      // Shift+wheel for mouse zoom
+    const isPinch = e.ctrlKey || e.metaKey;
+    const wantsMouseZoom = e.shiftKey;
     if (isPinch || wantsMouseZoom) {
       e.preventDefault();
       const factor = Math.exp(-e.deltaY * 0.0015);
@@ -297,11 +281,9 @@ function Editor() {
     }
   };
 
-  // Safari gesture zoom
   useEffect(() => {
     const vp = viewportRef.current;
     if (!vp) return;
-
     const onGestureStart = (e) => {
       if (!isPointerOverViewportRef.current) return;
       e.preventDefault();
@@ -321,7 +303,6 @@ function Editor() {
       if (!isPointerOverViewportRef.current) return;
       e.preventDefault();
     };
-
     window.addEventListener("gesturestart", onGestureStart, { passive: false });
     window.addEventListener("gesturechange", onGestureChange, { passive: false });
     window.addEventListener("gestureend", onGestureEnd, { passive: false });
@@ -346,12 +327,11 @@ function Editor() {
     });
   };
 
-  // ===== Sidebar navigation (zoom-in on jump) =====
   const jumpToNodeId = (id) => {
     const node = layout.nodeIndex.get(id);
     if (!node) return;
-    setSelectedId(null); // 이동 시 편집 종료
-    centerToNodeAtZoom(node, 1.6, "smooth"); // 확대 이동
+    setSelectedId(null);
+    centerToNodeAtZoom(node, 1.6, "smooth");
   };
 
   const SideTree = ({ node }) => {
@@ -375,18 +355,11 @@ function Editor() {
     return (
       <div className="side-tree" style={{ marginLeft: node.depth * 12, marginBottom: 4 }}>
         <style>{clickableHover}</style>
-        <button
-          onClick={() => jumpToNodeId(node.id)}
-          style={clickable}
-          title={`Go to "${node.data?.name}"`}
-        >
+        <button onClick={() => jumpToNodeId(node.id)} style={clickable} title={`Go to "${node.data?.name}"`}>
           {node.data?.name ?? "(unnamed)"}{" "}
-          <span style={{ color: "#888" }}>
-            {Array.isArray(node.children) ? `(${node.children.length})` : ""}
-          </span>
+          <span style={{ color: "#888" }}>{Array.isArray(node.children) ? `(${node.children.length})` : ""}</span>
         </button>
-        {Array.isArray(node.children) &&
-          node.children.map((c) => <SideTree key={c.id} node={c} />)}
+        {Array.isArray(node.children) && node.children.map((c) => <SideTree key={c.id} node={c} />)}
       </div>
     );
   };
@@ -414,16 +387,11 @@ function Editor() {
         display: "flex",
       }}
     >
-      {/* 전역: 사이드바 스크롤바 숨김 */}
       <style>{`
-        .side-panel {
-          scrollbar-width: none;      /* Firefox */
-          -ms-overflow-style: none;   /* IE/Edge 레거시 */
-        }
-        .side-panel::-webkit-scrollbar { display: none; } /* Chrome/Safari/Edge */
+        .side-panel { scrollbar-width: none; -ms-overflow-style: none; }
+        .side-panel::-webkit-scrollbar { display: none; }
       `}</style>
 
-      {/* 패널 닫힘: 좌상단 Show 버튼 */}
       {sidebarOpen ? null : (
         <button
           className="panel-toggle"
@@ -446,12 +414,11 @@ function Editor() {
         </button>
       )}
 
-      {/* ==== LEFT SIDE: Sidebar ==== */}
       {sidebarOpen && (
         <aside
           className="side-panel"
           style={{
-            position: "relative", // 버튼 absolute 기준
+            position: "relative",
             width: `${sidebarVW}vw`,
             minWidth: 240,
             maxWidth: 560,
@@ -460,19 +427,18 @@ function Editor() {
             borderRight: "1px solid #e5e5e5",
             boxShadow: "0 0 24px rgba(0,0,0,0.03)",
             padding: 12,
-            paddingBottom: 48,     // ✅ 하단 여백
-            overflowY: "auto",     // ✅ 스크롤은 가능 (스크롤바는 전역 CSS로 숨김)
+            paddingBottom: 48,
+            overflowY: "auto",
             zIndex: 2,
           }}
         >
-          {/* 패널 우측상단 토글 버튼 (팝업 느낌으로 살짝 겹치게) */}
           <button
             className="panel-toggle"
             onClick={() => setSidebarOpen(false)}
             style={{
               position: "absolute",
               top: 8,
-              right: -12,            // 살짝 겹치게
+              right: -12,
               transform: "translateX(0)",
               zIndex: 3,
               padding: "6px 10px",
@@ -488,11 +454,8 @@ function Editor() {
             ◀ Hide Panel
           </button>
 
-          {/* 패널 너비 조절 */}
           <div style={{ marginBottom: 16, marginTop: 36 }}>
-            <div style={{ fontSize: 12, color: "#555", marginBottom: 6 }}>
-              Panel width (vw)
-            </div>
+            <div style={{ fontSize: 12, color: "#555", marginBottom: 6 }}>Panel width (vw)</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
               <input
                 type="range"
@@ -517,7 +480,6 @@ function Editor() {
             </div>
           </div>
 
-          {/* 노드 간격 컨트롤 */}
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: "#555", marginBottom: 6 }}>세로 간격 (nodeSize Y)</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
@@ -597,25 +559,26 @@ function Editor() {
             </button>
           </div>
 
-          {/* === Vertical hierarchy list === */}
-          <div style={{ fontSize: 12, color: "#333", fontWeight: 600, marginBottom: 6 }}>
-            Hierarchy
-          </div>
+          <div style={{ fontSize: 12, color: "#333", fontWeight: 600, marginBottom: 6 }}>Hierarchy</div>
           <div style={{ fontSize: 13 }}>
             <SideTree node={layout.root} />
           </div>
         </aside>
       )}
 
-      {/* ==== RIGHT: Tree viewport ==== */}
       <div
         ref={viewportRef}
         className="viewport"
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={endPan}
-        onMouseLeave={(e) => { endPan(); isPointerOverViewportRef.current = false; }}
-        onMouseEnter={() => { isPointerOverViewportRef.current = true; }}
+        onMouseLeave={(e) => {
+          endPan();
+          isPointerOverViewportRef.current = false;
+        }}
+        onMouseEnter={() => {
+          isPointerOverViewportRef.current = true;
+        }}
         onWheel={onWheel}
         style={{
           flex: 1,
@@ -648,17 +611,13 @@ function Editor() {
               transformOrigin: "0 0",
             }}
           >
-            {/* Links */}
             <svg
               width={stageW}
               height={stageH}
               style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
             >
               {layout.links.map((link, i) => {
-                const pathGen = d3
-                  .linkHorizontal()
-                  .x((d) => stageX(d))
-                  .y((d) => stageY(d));
+                const pathGen = d3.linkHorizontal().x((d) => stageX(d)).y((d) => stageY(d));
                 return (
                   <path
                     key={i}
@@ -671,11 +630,13 @@ function Editor() {
               })}
             </svg>
 
-            {/* Nodes */}
             {layout.nodes.map((n) => (
               <div
                 key={n.id}
-                onClick={(e) => { e.stopPropagation(); setSelectedId(n.id); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedId(n.id);
+                }}
                 style={{
                   position: "absolute",
                   left: stageX(n),
@@ -692,6 +653,7 @@ function Editor() {
                   value={n.data?.value}
                   onAddChild={() => handleAddChildAt(n.id)}
                   onChangeField={(field, val) => setNodeField(n.id, field, val)}
+                  onDelete={() => handleDeleteNode(n.id)}
                 />
               </div>
             ))}
@@ -702,14 +664,8 @@ function Editor() {
   );
 }
 
-// ===== NodeCard (same as before) =====
-function NodeCard({
-  id, selected,
-  name, date, time, value,
-  onAddChild, onChangeField,
-}) {
+function NodeCard({ id, selected, name, date, time, value, onAddChild, onChangeField, onDelete }) {
   const HOVER_MAX = 560;
-
   const base = {
     background: "#fff",
     borderRadius: 10,
@@ -727,7 +683,6 @@ function NodeCard({
     maxWidth: selected ? HOVER_MAX : undefined,
     cursor: "default",
   };
-
   const plusBtn = {
     position: "absolute",
     right: -28,
@@ -744,7 +699,21 @@ function NodeCard({
     padding: 0,
     zIndex: 5,
   };
-
+  const closeBtn = {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    border: "1px solid rgba(0,0,0,0.2)",
+    background: "white",
+    cursor: "pointer",
+    fontSize: 14,
+    lineHeight: "22px",
+    padding: 0,
+    zIndex: 6,
+  };
   const stop = (e) => e.stopPropagation();
 
   return (
@@ -796,8 +765,25 @@ function NodeCard({
         <div className="title-static">{name}</div>
       )}
 
+      {selected && (
+        <button
+          onClick={(e) => {
+            stop(e);
+            onDelete();
+          }}
+          style={closeBtn}
+          title="Delete node"
+          aria-label="Delete node"
+        >
+          ×
+        </button>
+      )}
+
       <button
-        onClick={(e) => { stop(e); onAddChild(); }}
+        onClick={(e) => {
+          stop(e);
+          onAddChild();
+        }}
         style={plusBtn}
         title={`Add child to "${name}"`}
         aria-label="Add child"
@@ -830,7 +816,6 @@ function NodeCard({
                 />
               </div>
             </div>
-
             <div style={{ marginTop: 8 }}>
               <span className="label">Description</span>
               <textarea
