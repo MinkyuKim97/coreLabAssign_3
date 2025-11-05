@@ -28,7 +28,23 @@
               "date": "Nov 6 2025",
               "time": "",
               "value": "Hemisphere shape with a moving axis",
-              "children": []
+              "children": [
+                {
+                  "name": "Gain",
+                  "date": "Nov 5 2025",
+                  "time": "16:00",
+                  "value": "High gain for better signal reception",
+                  "children": [
+                    {
+                      "name": "Parabolic vs Hemisphere",
+                      "date": "Nov 4 2025",
+                      "time": "",
+                      "value": "Choosing hemisphere for wider range",
+                      "children": []
+                    }
+                  ]
+                }                
+              ]
             }
           ]
         }

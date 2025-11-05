@@ -1,5 +1,5 @@
 // Editor.jsx
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import * as d3 from "d3";
 import projectSchemes from "./projectData.json";
@@ -10,10 +10,81 @@ window.addEventListener("load", async () => {
 });
 
 function Editor() {
-  const [projectName, setProjectName] = useState(projectSchemes?.name ?? "Root");
-  const [children, setChildren] = useState(projectSchemes?.children ?? []);
+  // ==== load initial (from localStorage -> fallback to json) ====
+  const loadInitial = () => {
+    try {
+      const raw = localStorage.getItem("treeData_v1");
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return {
+      name: projectSchemes?.name ?? "Root",
+      date: projectSchemes?.date ?? "",
+      time: projectSchemes?.time ?? "",
+      value: projectSchemes?.value ?? "",
+      children: projectSchemes?.children ?? [],
+    };
+  };
+  const initial = loadInitial();
 
-  // 경로 id r.0.1 → [0,1]
+  const [projectName, setProjectName] = useState(initial.name);
+  const [rootMeta, setRootMeta] = useState({
+    date: initial.date ?? "",
+    time: initial.time ?? "",
+    value: initial.value ?? "",
+  });
+  const [children, setChildren] = useState(initial.children ?? []);
+
+  // auto-save to localStorage
+  useEffect(() => {
+    const data = { name: projectName, ...rootMeta, children };
+    localStorage.setItem("treeData_v1", JSON.stringify(data));
+  }, [projectName, rootMeta, children]);
+
+  // ===== Node spacing =====
+  const [nodeGapY, setNodeGapY] = useState(140);
+  const [nodeGapX, setNodeGapX] = useState(360);
+
+  // ===== Selection =====
+  const [selectedId, setSelectedId] = useState(null);
+
+  // ===== Sidebar toggle & width (vw) =====
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarVW, setSidebarVW] = useState(20); // 12~40 권장
+
+  // ===== Viewport & Stage =====
+  const viewportRef = useRef(null);
+  const isPanningRef = useRef(false);
+  const panRef = useRef({ startX: 0, startY: 0, startLeft: 0, startTop: 0 });
+  const initialCenterRef = useRef({ left: 0, top: 0 });
+  const hasAutoCenteredRef = useRef(false);
+
+  // ===== Zoom =====
+  const [zoom, setZoom] = useState(1);
+  const MIN_ZOOM = 0.4;
+  const MAX_ZOOM = 3.0;
+  const gestureRef = useRef({ startZoom: 1 });
+  const isPointerOverViewportRef = useRef(false);
+
+  // ===== measure viewport size =====
+  const [vpSize, setVpSize] = useState({ w: 0, h: 0 });
+  const measureViewport = () => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    setVpSize({ w: vp.clientWidth, h: vp.clientHeight });
+  };
+  useEffect(() => {
+    measureViewport();
+    window.addEventListener("resize", measureViewport);
+    return () => window.removeEventListener("resize", measureViewport);
+  }, []);
+  // 패널 열기/닫기, 패널 너비 변경 시에도 재측정
+  useEffect(() => {
+    requestAnimationFrame(measureViewport);
+  }, [sidebarOpen, sidebarVW]);
+
+  // ===== Helpers =====
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
   const parsePathToIndices = (id) =>
     (id ?? "")
       .split(".")
@@ -21,7 +92,6 @@ function Editor() {
       .map((s) => Number(s))
       .filter((n) => Number.isFinite(n));
 
-  // 불변 업데이트로 경로에 자식 추가
   const addChildImmutable = (arr, indices, newChild) => {
     if (!Array.isArray(arr)) arr = [];
     if (indices.length === 0) return [...arr, newChild];
@@ -34,22 +104,47 @@ function Editor() {
     });
   };
 
+  const updateNodeImmutable = (arr, indices, patch) => {
+    if (!Array.isArray(arr)) return arr;
+    if (indices.length === 0) return arr;
+    const [i, ...rest] = indices;
+    if (i < 0 || i >= arr.length) return arr;
+    return arr.map((child, idx) => {
+      if (idx !== i) return child;
+      if (rest.length === 0) {
+        return { ...child, ...patch };
+      } else {
+        const nextChildren = updateNodeImmutable(child.children ?? [], rest, patch);
+        return { ...child, children: nextChildren };
+      }
+    });
+  };
+
   const handleAddChildAt = (nodeId) => {
     const indices = parsePathToIndices(nodeId);
     const newChild = {
-      name: "New Project",
-      date: new Date().toISOString().slice(0, 10),
-      time: new Date().toTimeString().slice(0, 5),
-      value: "Description here",
+      name: "New",
+      date: "",
+      time: "",
+      value: "",
       children: [],
     };
     setChildren((prev) => addChildImmutable(prev, indices, newChild));
   };
 
-  // D3 트리 + 경로 기반 ID(r.0.1...)
-  const layout = useMemo(() => {
-    const root = d3.hierarchy({ name: projectName, children });
+  const setNodeField = (nodeId, field, value) => {
+    if (nodeId === "r") {
+      if (field === "name") setProjectName(value);
+      else setRootMeta((m) => ({ ...m, [field]: value }));
+      return;
+    }
+    const indices = parsePathToIndices(nodeId);
+    setChildren((prev) => updateNodeImmutable(prev, indices, { [field]: value }));
+  };
 
+  // ===== D3 layout + path IDs =====
+  const layout = useMemo(() => {
+    const root = d3.hierarchy({ name: projectName, ...rootMeta, children });
     root.id = "r";
     root.eachBefore((n) => {
       if (n.parent?.children) {
@@ -58,18 +153,15 @@ function Editor() {
       }
     });
 
-    // 간격 넓게
     const tree = d3
       .tree()
-      // .nodeSize([140, 360])
-      .nodeSize([50, 300])
+      .nodeSize([nodeGapY, nodeGapX])
       .separation((a, b) => (a.parent === b.parent ? 1.8 : 3.0));
 
     const laid = tree(root);
     const nodes = laid.descendants();
     const links = laid.links();
 
-    // 스테이지 크기
     const minX = Math.min(...nodes.map((n) => n.x));
     const maxX = Math.max(...nodes.map((n) => n.x));
     const minY = Math.min(...nodes.map((n) => n.y));
@@ -79,11 +171,236 @@ function Editor() {
     const contentW = maxY - minY + pad * 2;
     const contentH = maxX - minX + pad * 2;
 
-    const toStageX = (n) => n.y - minY + pad; // left
-    const toStageY = (n) => n.x - minX + pad; // top
+    const baseX = (n) => n.y - minY + pad;
+    const baseY = (n) => n.x - minX + pad;
 
-    return { nodes, links, contentW, contentH, toStageX, toStageY };
-  }, [projectName, children]);
+    const rootNode = nodes.find((n) => n.depth === 0) ?? nodes[0];
+    const nodeIndex = new Map(nodes.map((n) => [n.id, n]));
+
+    return { nodes, links, contentW, contentH, baseX, baseY, rootNode, nodeIndex, root };
+  }, [projectName, rootMeta, children, nodeGapY, nodeGapX]);
+
+  // ===== Stage geometry (with zoom) =====
+  const stagePadX = Math.max(0, Math.round(vpSize.w * 0.5));
+  const stagePadY = Math.max(0, Math.round(vpSize.h * 0.5));
+  const stageW = layout.contentW + stagePadX * 2;
+  const stageH = layout.contentH + stagePadY * 2;
+  const stageOuterW = stageW * zoom;
+  const stageOuterH = stageH * zoom;
+
+  const stageX = (n) => stagePadX + layout.baseX(n);
+  const stageY = (n) => stagePadY + layout.baseY(n);
+  const scaledX = (n, atZoom = zoom) => atZoom * stageX(n);
+  const scaledY = (n, atZoom = zoom) => atZoom * stageY(n);
+
+  // ===== Center helpers =====
+  const clampScroll = (vp, left, top, atZoom) => {
+    const maxL = Math.max(0, (stageW * atZoom) - vp.clientWidth);
+    const maxT = Math.max(0, (stageH * atZoom) - vp.clientHeight);
+    return { left: clamp(left, 0, maxL), top: clamp(top, 0, maxT) };
+    };
+  const centerToNode = (node, opts = { behavior: "auto" }) => {
+    const vp = viewportRef.current;
+    if (!vp || !node) return;
+    const x = scaledX(node);
+    const y = scaledY(node);
+    const { left, top } = clampScroll(vp, x - vp.clientWidth / 2, y - vp.clientHeight / 2, zoom);
+    vp.scrollTo({ left, top, behavior: opts.behavior });
+    initialCenterRef.current = { left, top };
+  };
+
+  const centerToNodeAtZoom = (node, targetZoom = 1.6, behavior = "smooth") => {
+    const vp = viewportRef.current;
+    if (!vp || !node) return;
+    const tz = clamp(targetZoom, MIN_ZOOM, MAX_ZOOM);
+    const x = scaledX(node, tz);
+    const y = scaledY(node, tz);
+    const { left, top } = clampScroll(vp, x - vp.clientWidth / 2, y - vp.clientHeight / 2, tz);
+    setZoom(tz);
+    requestAnimationFrame(() => {
+      vp.scrollTo({ left, top, behavior });
+      initialCenterRef.current = { left, top };
+    });
+  };
+
+  // 최초 1회 자동 센터
+  useEffect(() => {
+    if (hasAutoCenteredRef.current) return;
+    if (vpSize.w === 0 || vpSize.h === 0) return;
+    centerToNode(layout.rootNode);
+    hasAutoCenteredRef.current = true;
+  }, [vpSize.w, vpSize.h, layout.rootNode]); // eslint-disable-line
+
+  // ===== Panning / empty click = deselect =====
+  const onMouseDown = (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest(".node-card") || e.target.closest(".side-panel") || e.target.closest(".panel-toggle")) return;
+    setSelectedId(null);
+    const vp = viewportRef.current;
+    if (!vp) return;
+    isPanningRef.current = true;
+    panRef.current.startX = e.clientX;
+    panRef.current.startY = e.clientY;
+    panRef.current.startLeft = vp.scrollLeft;
+    panRef.current.startTop = vp.scrollTop;
+    e.preventDefault();
+  };
+  const onMouseMove = (e) => {
+    if (!isPanningRef.current) return;
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const dx = e.clientX - panRef.current.startX;
+    const dy = e.clientY - panRef.current.startY;
+    vp.scrollLeft = panRef.current.startLeft - dx;
+    vp.scrollTop  = panRef.current.startTop - dy;
+  };
+  const endPan = () => { isPanningRef.current = false; };
+
+  // ===== Zoom (wheel + pinch) =====
+  const zoomAroundPointer = (clientX, clientY, factor) => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+
+    const prev = zoom;
+    const next = clamp(prev * factor, MIN_ZOOM, MAX_ZOOM);
+    if (next === prev) return;
+
+    const rect = vp.getBoundingClientRect();
+    const screenX = clientX - rect.left;
+    const screenY = clientY - rect.top;
+
+    const offsetX = vp.scrollLeft + screenX;
+    const offsetY = vp.scrollTop + screenY;
+
+    const contentX = offsetX / prev;
+    const contentY = offsetY / prev;
+
+    const newOffsetX = contentX * next;
+    const newOffsetY = contentY * next;
+
+    const { left, top } = clampScroll(vp, newOffsetX - screenX, newOffsetY - screenY, next);
+
+    setZoom(next);
+    requestAnimationFrame(() => {
+      vp.scrollLeft = left;
+      vp.scrollTop  = top;
+    });
+  };
+
+  const onWheel = (e) => {
+    const isPinch = e.ctrlKey || e.metaKey; // trackpad pinch
+    const wantsMouseZoom = e.shiftKey;      // Shift+wheel for mouse zoom
+    if (isPinch || wantsMouseZoom) {
+      e.preventDefault();
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      zoomAroundPointer(e.clientX, e.clientY, factor);
+    }
+  };
+
+  // Safari gesture zoom
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+
+    const onGestureStart = (e) => {
+      if (!isPointerOverViewportRef.current) return;
+      e.preventDefault();
+      gestureRef.current.startZoom = zoom;
+    };
+    const onGestureChange = (e) => {
+      if (!isPointerOverViewportRef.current) return;
+      e.preventDefault();
+      const targetZoom = clamp(gestureRef.current.startZoom * e.scale, MIN_ZOOM, MAX_ZOOM);
+      const factor = targetZoom / zoom;
+      const rect = vp.getBoundingClientRect();
+      const cx = rect.left + vp.clientWidth / 2;
+      const cy = rect.top + vp.clientHeight / 2;
+      zoomAroundPointer(cx, cy, factor);
+    };
+    const onGestureEnd = (e) => {
+      if (!isPointerOverViewportRef.current) return;
+      e.preventDefault();
+    };
+
+    window.addEventListener("gesturestart", onGestureStart, { passive: false });
+    window.addEventListener("gesturechange", onGestureChange, { passive: false });
+    window.addEventListener("gestureend", onGestureEnd, { passive: false });
+    return () => {
+      window.removeEventListener("gesturestart", onGestureStart);
+      window.removeEventListener("gesturechange", onGestureChange);
+      window.removeEventListener("gestureend", onGestureEnd);
+    };
+  }, [zoom]);
+
+  const resetView = () => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const targetZoom = 1;
+    const x = scaledX(layout.rootNode, targetZoom);
+    const y = scaledY(layout.rootNode, targetZoom);
+    const { left, top } = clampScroll(vp, x - vp.clientWidth / 2, y - vp.clientHeight / 2, targetZoom);
+    setZoom(targetZoom);
+    requestAnimationFrame(() => {
+      vp.scrollTo({ left, top, behavior: "smooth" });
+      initialCenterRef.current = { left, top };
+    });
+  };
+
+  // ===== Sidebar navigation (zoom-in on jump) =====
+  const jumpToNodeId = (id) => {
+    const node = layout.nodeIndex.get(id);
+    if (!node) return;
+    setSelectedId(null); // 이동 시 편집 종료
+    centerToNodeAtZoom(node, 1.6, "smooth"); // 확대 이동
+  };
+
+  const SideTree = ({ node }) => {
+    const clickable = {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      padding: "6px 8px",
+      borderRadius: 6,
+      border: "1px solid transparent",
+      background: "transparent",
+      cursor: "pointer",
+      fontSize: 13,
+    };
+    const clickableHover = `
+      .side-tree button:hover {
+        background: #f3f4f6;
+        border-color: #e5e7eb;
+      }
+    `;
+    return (
+      <div className="side-tree" style={{ marginLeft: node.depth * 12, marginBottom: 4 }}>
+        <style>{clickableHover}</style>
+        <button
+          onClick={() => jumpToNodeId(node.id)}
+          style={clickable}
+          title={`Go to "${node.data?.name}"`}
+        >
+          {node.data?.name ?? "(unnamed)"}{" "}
+          <span style={{ color: "#888" }}>
+            {Array.isArray(node.children) ? `(${node.children.length})` : ""}
+          </span>
+        </button>
+        {Array.isArray(node.children) &&
+          node.children.map((c) => <SideTree key={c.id} node={c} />)}
+      </div>
+    );
+  };
+
+  const downloadJSON = () => {
+    const data = { name: projectName, ...rootMeta, children };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "projectData.updated.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div
@@ -94,97 +411,311 @@ function Editor() {
         width: "100%",
         height: "100%",
         background: "#fafafa",
+        display: "flex",
       }}
     >
-      {/* 전체 화면 트리 뷰포트 */}
-      <div className="viewport" style={{ position: "absolute", inset: 0, overflow: "auto", zIndex: 0 }}>
-        <div
-          className="stage"
-          style={{ position: "relative", width: layout.contentW, height: layout.contentH, margin: "0 auto" }}
-        >
-          {/* 링크 (클릭 방지) */}
-          <svg
-            width={layout.contentW}
-            height={layout.contentH}
-            style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
-          >
-            {layout.links.map((link, i) => {
-              const pathGen = d3.linkHorizontal().x((d) => layout.toStageX(d)).y((d) => layout.toStageY(d));
-              return (
-                <path
-                  key={i}
-                  d={pathGen({ source: link.source, target: link.target })}
-                  fill="none"
-                  stroke="#c0c0c0"
-                  strokeWidth={1.5}
-                />
-              );
-            })}
-          </svg>
+      {/* 전역: 사이드바 스크롤바 숨김 */}
+      <style>{`
+        .side-panel {
+          scrollbar-width: none;      /* Firefox */
+          -ms-overflow-style: none;   /* IE/Edge 레거시 */
+        }
+        .side-panel::-webkit-scrollbar { display: none; } /* Chrome/Safari/Edge */
+      `}</style>
 
-          {/* 노드 (절대 배치) */}
-          {layout.nodes.map((n) => (
-            <div
-              key={n.id}
-              style={{
-                position: "absolute",
-                left: layout.toStageX(n),
-                top: layout.toStageY(n),
-                transform: "translate(-50%, -50%)",
-              }}
-            >
-              <NodeCard
-                id={n.id}
-                name={n.data?.name}
-                date={n.data?.date}
-                time={n.data?.time}
-                value={n.data?.value}
-                childCount={Array.isArray(n.data?.children) ? n.data.children.length : 0}
-                onAddChild={() => handleAddChildAt(n.id)}
+      {/* 패널 닫힘: 좌상단 Show 버튼 */}
+      {sidebarOpen ? null : (
+        <button
+          className="panel-toggle"
+          onClick={() => setSidebarOpen(true)}
+          style={{
+            position: "fixed",
+            left: 8,
+            top: 8,
+            zIndex: 1000,
+            padding: "6px 10px",
+            borderRadius: 8,
+            border: "1px solid #ddd",
+            background: "#fff",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            cursor: "pointer",
+          }}
+          title="Show panel"
+        >
+          ▶ Show Panel
+        </button>
+      )}
+
+      {/* ==== LEFT SIDE: Sidebar ==== */}
+      {sidebarOpen && (
+        <aside
+          className="side-panel"
+          style={{
+            position: "relative", // 버튼 absolute 기준
+            width: `${sidebarVW}vw`,
+            minWidth: 240,
+            maxWidth: 560,
+            height: "100%",
+            background: "#ffffff",
+            borderRight: "1px solid #e5e5e5",
+            boxShadow: "0 0 24px rgba(0,0,0,0.03)",
+            padding: 12,
+            paddingBottom: 48,     // ✅ 하단 여백
+            overflowY: "auto",     // ✅ 스크롤은 가능 (스크롤바는 전역 CSS로 숨김)
+            zIndex: 2,
+          }}
+        >
+          {/* 패널 우측상단 토글 버튼 (팝업 느낌으로 살짝 겹치게) */}
+          <button
+            className="panel-toggle"
+            onClick={() => setSidebarOpen(false)}
+            style={{
+              position: "absolute",
+              top: 8,
+              right: -12,            // 살짝 겹치게
+              transform: "translateX(0)",
+              zIndex: 3,
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "1px solid #ddd",
+              background: "#fff",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+            title="Hide panel"
+          >
+            ◀ Hide Panel
+          </button>
+
+          {/* 패널 너비 조절 */}
+          <div style={{ marginBottom: 16, marginTop: 36 }}>
+            <div style={{ fontSize: 12, color: "#555", marginBottom: 6 }}>
+              Panel width (vw)
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
+              <input
+                type="range"
+                min={12}
+                max={40}
+                step={1}
+                value={sidebarVW}
+                onChange={(e) => setSidebarVW(Number(e.target.value))}
+              />
+              <input
+                type="number"
+                min={12}
+                max={40}
+                step={1}
+                value={sidebarVW}
+                onChange={(e) => {
+                  const v = Math.max(12, Math.min(40, Number(e.target.value) || 0));
+                  setSidebarVW(v);
+                }}
+                style={{ width: 80, padding: "6px 8px", border: "1px solid #e5e5e5", borderRadius: 6 }}
               />
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {/* 루트 이름 입력 */}
+          {/* 노드 간격 컨트롤 */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: "#555", marginBottom: 6 }}>세로 간격 (nodeSize Y)</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
+              <input
+                type="range"
+                min={80}
+                max={300}
+                step={5}
+                value={nodeGapY}
+                onChange={(e) => setNodeGapY(Number(e.target.value))}
+              />
+              <input
+                type="number"
+                min={80}
+                max={300}
+                step={5}
+                value={nodeGapY}
+                onChange={(e) => {
+                  const v = Math.max(80, Math.min(300, Number(e.target.value) || 0));
+                  setNodeGapY(v);
+                }}
+                style={{ width: 80, padding: "6px 8px", border: "1px solid #e5e5e5", borderRadius: 6 }}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: "#555", marginBottom: 6 }}>가로 간격 (nodeSize X)</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
+              <input
+                type="range"
+                min={200}
+                max={800}
+                step={10}
+                value={nodeGapX}
+                onChange={(e) => setNodeGapX(Number(e.target.value))}
+              />
+              <input
+                type="number"
+                min={200}
+                max={800}
+                step={10}
+                value={nodeGapX}
+                onChange={(e) => {
+                  const v = Math.max(200, Math.min(800, Number(e.target.value) || 0));
+                  setNodeGapX(v);
+                }}
+                style={{ width: 80, padding: "6px 8px", border: "1px solid #e5e5e5", borderRadius: 6 }}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <button
+              onClick={resetView}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 6,
+                border: "1px solid rgba(0,0,0,0.2)",
+                background: "white",
+                cursor: "pointer",
+              }}
+            >
+              Reset (root center)
+            </button>
+            <button
+              onClick={downloadJSON}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 6,
+                border: "1px solid rgba(0,0,0,0.2)",
+                background: "white",
+                cursor: "pointer",
+              }}
+            >
+              Export JSON
+            </button>
+          </div>
+
+          {/* === Vertical hierarchy list === */}
+          <div style={{ fontSize: 12, color: "#333", fontWeight: 600, marginBottom: 6 }}>
+            Hierarchy
+          </div>
+          <div style={{ fontSize: 13 }}>
+            <SideTree node={layout.root} />
+          </div>
+        </aside>
+      )}
+
+      {/* ==== RIGHT: Tree viewport ==== */}
       <div
-        className="controls"
+        ref={viewportRef}
+        className="viewport"
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={endPan}
+        onMouseLeave={(e) => { endPan(); isPointerOverViewportRef.current = false; }}
+        onMouseEnter={() => { isPointerOverViewportRef.current = true; }}
+        onWheel={onWheel}
         style={{
-          position: "absolute",
-          top: 16,
-          left: 16,
-          zIndex: 10,
-          background: "white",
-          border: "1px solid #e5e5e5",
-          borderRadius: 8,
-          boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
-          padding: 12,
-          width: 320,
+          flex: 1,
+          position: "relative",
+          overflow: "auto",
+          cursor: isPanningRef.current ? "grabbing" : "grab",
+          userSelect: isPanningRef.current ? "none" : "auto",
+          zIndex: 1,
         }}
       >
-        <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6 }}>Project Name</label>
-        <input
-          type="text"
-          value={projectName}
-          onChange={(e) => setProjectName(e.target.value)}
-          style={{ width: "100%", padding: 8 }}
-        />
+        <div
+          className="stage"
+          style={{
+            position: "relative",
+            width: stageOuterW,
+            height: stageOuterH,
+            margin: "0 auto",
+            background: "#fafafa",
+          }}
+        >
+          <div
+            className="stage-inner"
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: stageW,
+              height: stageH,
+              transform: `scale(${zoom})`,
+              transformOrigin: "0 0",
+            }}
+          >
+            {/* Links */}
+            <svg
+              width={stageW}
+              height={stageH}
+              style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
+            >
+              {layout.links.map((link, i) => {
+                const pathGen = d3
+                  .linkHorizontal()
+                  .x((d) => stageX(d))
+                  .y((d) => stageY(d));
+                return (
+                  <path
+                    key={i}
+                    d={pathGen({ source: link.source, target: link.target })}
+                    fill="none"
+                    stroke="#c0c0c0"
+                    strokeWidth={1.5}
+                  />
+                );
+              })}
+            </svg>
+
+            {/* Nodes */}
+            {layout.nodes.map((n) => (
+              <div
+                key={n.id}
+                onClick={(e) => { e.stopPropagation(); setSelectedId(n.id); }}
+                style={{
+                  position: "absolute",
+                  left: stageX(n),
+                  top: stageY(n),
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <NodeCard
+                  id={n.id}
+                  selected={selectedId === n.id}
+                  name={n.data?.name}
+                  date={n.data?.date}
+                  time={n.data?.time}
+                  value={n.data?.value}
+                  onAddChild={() => handleAddChildAt(n.id)}
+                  onChangeField={(field, val) => setNodeField(n.id, field, val)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function NodeCard({ id, name, date, time, value, childCount, onAddChild }) {
+// ===== NodeCard (same as before) =====
+function NodeCard({
+  id, selected,
+  name, date, time, value,
+  onAddChild, onChangeField,
+}) {
+  const HOVER_MAX = 560;
+
   const base = {
     background: "#fff",
     borderRadius: 10,
-    border: "1px solid rgba(0,0,0,0.12)",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-    // ✅ 폭 고정 & 자동 줄바꿈
-    width: 240,
-    minWidth: 240,
-    maxWidth: 240,
+    border: selected ? "1px solid #3b82f6" : "1px solid rgba(0,0,0,0.12)",
+    boxShadow: selected ? "0 6px 18px rgba(59,130,246,0.25)" : "0 1px 3px rgba(0,0,0,0.06)",
+    display: "inline-block",
     textAlign: "left",
     userSelect: "none",
     position: "relative",
@@ -193,6 +724,8 @@ function NodeCard({ id, name, date, time, value, childCount, onAddChild }) {
     wordBreak: "break-word",
     overflowWrap: "anywhere",
     whiteSpace: "normal",
+    maxWidth: selected ? HOVER_MAX : undefined,
+    cursor: "default",
   };
 
   const plusBtn = {
@@ -212,31 +745,59 @@ function NodeCard({ id, name, date, time, value, childCount, onAddChild }) {
     zIndex: 5,
   };
 
+  const stop = (e) => e.stopPropagation();
+
   return (
-    <div className="node-card" style={base}>
-      {/* hover용 CSS: inline 스타일로 max-height/opacity 지정하지 않음 */}
+    <div className={`node-card ${selected ? "selected" : ""}`} style={base}>
       <style>{`
         .node-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.16); }
-        .node-card .details-inline {
-          max-height: 0;
-          opacity: 0;
+        .node-card .details-inline { display: none; }
+        .node-card:hover .details-inline { display: block; }
+        .node-card.selected .details-inline { display: block; }
+        .node-card .title-static {
+          display: block;
+          white-space: nowrap;
           overflow: hidden;
-          padding-top: 0;
-          transition: max-height 200ms ease, opacity 120ms ease, padding-top 120ms ease;
+          text-overflow: ellipsis;
+          max-width: 100%;
+          font-weight: 700;
+          font-size: 14px;
+          margin-right: 12px;
         }
-        .node-card:hover .details-inline {
-          max-height: 320px; /* 충분히 큰 값 */
-          opacity: 1;
-          padding-top: 6px;
+        .node-card .title-input {
+          font-weight: 700;
+          font-size: 14px;
+          border: 1px solid #e5e5e5;
+          border-radius: 6px;
+          padding: 4px 8px;
+          width: 100%;
+          box-sizing: border-box;
         }
+        .node-card .text-input {
+          border: 1px solid #e5e5e5;
+          border-radius: 6px;
+          padding: 6px 8px;
+          width: 100%;
+          box-sizing: border-box;
+          font-size: 12px;
+        }
+        .node-card .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .node-card .label { font-size: 12px; color: #555; margin-bottom: 4px; display: block; }
       `}</style>
 
-      {/* 항상 보이는 타이틀 */}
-      <div style={{ fontWeight: 700, fontSize: 14, marginRight: 12 }}>{name}</div>
+      {selected ? (
+        <input
+          className="title-input"
+          value={name ?? ""}
+          onChange={(e) => onChangeField("name", e.target.value)}
+          onClick={stop}
+        />
+      ) : (
+        <div className="title-static">{name}</div>
+      )}
 
-      {/* 항상 보이는 + 버튼 (우측 고정) */}
       <button
-        onClick={onAddChild}
+        onClick={(e) => { stop(e); onAddChild(); }}
         style={plusBtn}
         title={`Add child to "${name}"`}
         aria-label="Add child"
@@ -244,27 +805,55 @@ function NodeCard({ id, name, date, time, value, childCount, onAddChild }) {
         +
       </button>
 
-      {/* 호버 시 내부에서 펼쳐지는 상세 */}
-      <div className="details-inline">
-        {date != null && (
-          <div style={{ fontSize: 12, marginBottom: 4 }}>
-            <b>Date:</b> {date}
-          </div>
+      <div className="details-inline" style={{ marginTop: 6 }}>
+        {selected ? (
+          <>
+            <div className="row">
+              <div>
+                <span className="label">Date</span>
+                <input
+                  className="text-input"
+                  value={date ?? ""}
+                  onChange={(e) => onChangeField("date", e.target.value)}
+                  onClick={stop}
+                  placeholder="YYYY-MM-DD"
+                />
+              </div>
+              <div>
+                <span className="label">Time</span>
+                <input
+                  className="text-input"
+                  value={time ?? ""}
+                  onChange={(e) => onChangeField("time", e.target.value)}
+                  onClick={stop}
+                  placeholder="HH:MM"
+                />
+              </div>
+            </div>
+
+            <div style={{ marginTop: 8 }}>
+              <span className="label">Description</span>
+              <textarea
+                className="text-input"
+                rows={3}
+                value={value ?? ""}
+                onChange={(e) => onChangeField("value", e.target.value)}
+                onClick={stop}
+                placeholder="Type description..."
+                style={{ resize: "vertical" }}
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            {date && <div style={{ fontSize: 12, marginBottom: 2 }}><b>Date:</b> {date}</div>}
+            {time && <div style={{ fontSize: 12, marginBottom: 2 }}><b>Time:</b> {time}</div>}
+            {value && <div style={{ fontSize: 12, marginBottom: 2 }}><b>Description:</b> {value}</div>}
+          </>
         )}
-        {time != null && (
-          <div style={{ fontSize: 12, marginBottom: 4 }}>
-            <b>Time:</b> {time}
-          </div>
-        )}
-        {value != null && (
-          <div style={{ fontSize: 12, marginBottom: 4 }}>
-            <b>Description:</b> {value}
-          </div>
-        )}
-        <div style={{ fontSize: 12, color: "#666" }}>
-          <b>Children:</b> {childCount}
-        </div>
       </div>
     </div>
   );
 }
+
+export default Editor;
