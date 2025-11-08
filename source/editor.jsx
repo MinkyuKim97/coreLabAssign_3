@@ -575,13 +575,12 @@ function Editor() {
                 onChange={(e) => setNodeGapY(Number(e.target.value))}
               />
 
-              /> */}
             </div>
           </div>
 
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 12, color: "#555", marginBottom: 6 }}>
-              X Width)
+              X Width
             </div>
             <div
               style={{
