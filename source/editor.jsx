@@ -532,7 +532,7 @@ function Editor() {
 
           <div style={{ marginBottom: 16, marginTop: 36 }}>
             <div style={{ fontSize: 12, color: "#555", marginBottom: 6 }}>
-              Panel width (vw)
+              Panel width
             </div>
             <div
               style={{
