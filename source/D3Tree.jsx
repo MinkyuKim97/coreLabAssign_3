@@ -1,4 +1,3 @@
-// src/D3Tree.jsx
 import React, { useMemo, useState } from "react";
 import * as d3 from "d3";
 
@@ -14,16 +13,13 @@ export default function D3Tree({
   const [collapsed, setCollapsed] = useState(new Set());
 
   const root = useMemo(() => {
-    // 1) 계층화
     const h = d3.hierarchy(data);
 
-    // 2) 접기 상태 반영(접힌 노드는 children 제거)
     h.eachBefore((n) => {
       n._hasChildren = Array.isArray(n.children) && n.children.length > 0;
       if (collapsed.has(getId(n))) n.children = null;
     });
 
-    // 3) 트리 좌표 계산
     return d3.tree().nodeSize(nodeSize)(h);
   }, [data, nodeSize, collapsed]);
 
@@ -68,13 +64,11 @@ export default function D3Tree({
                 });
               }}
             >
-              {/* Swatch 느낌의 박스 */}
               <rect x={-70} y={-18} width={140} height={36} rx={8} fill="#b8b8b8" />
               <text textAnchor="middle" dy="0.35em" fontSize={12}>
                 {n.data?.name}
               </text>
 
-              {/* 접기/펼치기 표시(자식이 있을 때만) */}
               {n._hasChildren && (
                 <text x={-78} y={4} fontSize={14} textAnchor="end" pointerEvents="none">
                   {isCollapsed ? "▶" : "▼"}
