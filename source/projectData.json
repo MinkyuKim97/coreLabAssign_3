@@ -2,7 +2,7 @@
   "name": "Tree-Node Project Manager",
   "date": "Nov 10 2025",
   "time": "23:59",
-  "value": "A simple school project to plan tasks as a tree. Build a basic editor and viewer for nodes.",
+  "value": "Building a tree-node based project manager with React",
   "children": [
     {
       "name": "Idea sketch",
