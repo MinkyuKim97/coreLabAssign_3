@@ -543,7 +543,7 @@ function Editor() {
               }}
             >
               <input
-                type="range"
+                type="range"                
                 min={12}
                 max={30}
                 step={1}
@@ -927,7 +927,7 @@ function NodeCard({
                     value={date ?? ""}
                     onChange={(e) => onChangeField("date", e.target.value)}
                     onClick={stop}
-                    placeholder="YYYY-MM-DD"
+                    placeholder="MM-DD-YYYY"
                   />
                 </div>
                 <div>

@@ -1,106 +1,306 @@
 {
-  "name": "Satellite Tacking Station",
-  "date": "Feb 22 2026",
-  "time": "",
-  "value": "Focusing on an efficiency to build tracking station",
+  "name": "Tree-Node Project Manager",
+  "date": "Nov 10 2025",
+  "time": "23:59",
+  "value": "A simple school project to plan tasks as a tree. Build a basic editor and viewer for nodes.",
   "children": [
     {
-      "name": "Research",
-      "date": "Nov 10 2025",
-      "time": "16:00",
-      "value": "Researching hardware and software requirements",
+      "name": "Idea sketch",
+      "date": "Nov 1st 2025",
+      "time": "",
+      "value": "Sketching what I want to build and how",
       "children": [
         {
-          "name": "Hardware",
-          "date": "Nov 8 2025",
+          "name": "Managing my projects?",
+          "date": "",
           "time": "",
-          "value": "Check possible hardware options",
+          "value": "",
+          "children": []
+        },
+        {
+          "name": "Using React",
+          "date": "",
+          "time": "",
+          "value": "",
           "children": [
             {
-              "name": "2-Axis robot arm",
-              "date": "Nov 7 2025",
-              "time": "16:00",
-              "value": "Using 2-Axis robot arm with a high torque adjusted motor",
+              "name": "Connect with JSON",
+              "date": "",
+              "time": "",
+              "value": "",
               "children": []
             },
             {
-              "name": "Hemisphere antenna",
-              "date": "Nov 6 2025",
+              "name": "Data manging",
+              "date": "",
               "time": "",
-              "value": "Hemisphere shape with a moving axis",
+              "value": "",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Research and apply",
+      "date": "",
+      "time": "",
+      "value": "",
+      "children": [
+        {
+          "name": "D3 library understand",
+          "date": "",
+          "time": "",
+          "value": "",
+          "children": [
+            {
+              "name": "Build sample Tree shape",
+              "date": "",
+              "time": "",
+              "value": "",
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "Making a sample data",
+          "date": "",
+          "time": "",
+          "value": "",
+          "children": [
+            {
+              "name": "Set the structure and contents",
+              "date": "",
+              "time": "",
+              "value": "",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Build Tree shape",
+      "date": "",
+      "time": "",
+      "value": "",
+      "children": [
+        {
+          "name": "Node placing",
+          "date": "",
+          "time": "",
+          "value": "",
+          "children": []
+        },
+        {
+          "name": "Node connecting",
+          "date": "",
+          "time": "",
+          "value": "",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "More features",
+      "date": "",
+      "time": "",
+      "value": "",
+      "children": [
+        {
+          "name": "Side bar",
+          "date": "",
+          "time": "",
+          "value": "",
+          "children": [
+            {
+              "name": "Hierarchy navigation",
+              "date": "",
+              "time": "",
+              "value": "",
               "children": [
                 {
-                  "name": "Gain",
-                  "date": "Nov 5 2025",
-                  "time": "16:00",
-                  "value": "High gain for better signal reception",
-                  "children": [
-                    {
-                      "name": "Parabolic vs Hemisphere",
-                      "date": "Nov 4 2025",
-                      "time": "",
-                      "value": "Choosing hemisphere for wider range",
-                      "children": []
-                    }
-                  ]
-                }                
+                  "name": "Move to selected one",
+                  "date": "",
+                  "time": "",
+                  "value": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "Node distance adjust",
+              "date": "",
+              "time": "",
+              "value": "",
+              "children": [
+                {
+                  "name": "X, Y",
+                  "date": "",
+                  "time": "",
+                  "value": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "Some Buttons",
+              "date": "",
+              "time": "",
+              "value": "",
+              "children": [
+                {
+                  "name": "Return to root center",
+                  "date": "",
+                  "time": "",
+                  "value": "",
+                  "children": []
+                },
+                {
+                  "name": "Export JSON",
+                  "date": "",
+                  "time": "",
+                  "value": "",
+                  "children": []
+                },
+                {
+                  "name": "Fetch JSON (for resetting the localstorage)",
+                  "date": "",
+                  "time": "",
+                  "value": "",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Node editing",
+          "date": "",
+          "time": "",
+          "value": "",
+          "children": [
+            {
+              "name": "Adding/Deleting more nodes",
+              "date": "",
+              "time": "",
+              "value": "",
+              "children": []
+            },
+            {
+              "name": "Change node infos",
+              "date": "",
+              "time": "",
+              "value": "",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Optional",
+      "date": "",
+      "time": "",
+      "value": "",
+      "children": [
+        {
+          "name": "D3: Radial Tree shape",
+          "date": "",
+          "time": "",
+          "value": "",
+          "children": [
+            {
+              "name": "Or try other D3 Graph shapes",
+              "date": "",
+              "time": "",
+              "value": "",
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "Firebase JSON fetch",
+          "date": "",
+          "time": "",
+          "value": "",
+          "children": []
+        },
+        {
+          "name": "Node adjust and realign",
+          "date": "",
+          "time": "",
+          "value": "",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Submission",
+      "date": "Nov 10 2025",
+      "time": "23:59",
+      "value": "Submit the result",
+      "children": [
+        {
+          "name": "Github code upload",
+          "date": "",
+          "time": "",
+          "value": "",
+          "children": [
+            {
+              "name": "Commit final code",
+              "date": "",
+              "time": "",
+              "value": "",
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "5 min WalkThrough video",
+          "date": "",
+          "time": "",
+          "value": "Make sure to list what I want to say.",
+          "children": [
+            {
+              "name": "What was the goal?",
+              "date": "",
+              "time": "",
+              "value": "",
+              "children": [
+                {
+                  "name": "For managing my own project with a tree visual",
+                  "date": "",
+                  "time": "",
+                  "value": "",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "How I build?",
+              "date": "",
+              "time": "",
+              "value": "",
+              "children": [
+                {
+                  "name": "React Swatch example",
+                  "date": "",
+                  "time": "",
+                  "value": "",
+                  "children": []
+                },
+                {
+                  "name": "D3 tree graph",
+                  "date": "",
+                  "time": "",
+                  "value": "",
+                  "children": []
+                }
               ]
             }
           ]
         }
-      ]
-    },
-    {
-      "name": "Prototype Fabrication",
-      "date": "Dec 20 2025",
-      "time": "18:50",
-      "value": "Building prototype",
-      "children": [
-        {
-          "name": "3D printing",
-          "date": "Dec 10 2025",
-          "time": "18:50",
-          "value": "3D printing the parts",
-          "children": [
-            {
-              "name": "Planetary gear",
-              "date": "Dec 8 2025",
-              "time": "",
-              "value": "2 for each axis, additional 1 for base",
-              "children": []
-            }
-          ]
-        },
-        {
-          "name": "Base Plate Assembly",
-          "date": "Dec 5 2025",
-          "time": "18:50",
-          "value": "Find base plate which can handle the momentom weight",
-          "children": []
-        }
-      ]
-    },
-    {
-      "name": "Software Development",
-      "date": "Jan 15 2026",
-      "time": "12:30",
-      "value": "Software side dev",
-      "children": [
-        {
-          "name": "Satellite Coordination Data",
-          "date": "Jan 12 2026",
-          "time": "18:30",
-          "value": "Using API, premade JSON to track satellite position",
-          "children": []
-        },
-        {
-          "name": "Applying Input and tracking with head",
-          "date": "Jan 14 2026",
-          "time": "",
-          "value": "Use input data to track data",
-          "children": []
-        }
-        
       ]
     }
   ]
