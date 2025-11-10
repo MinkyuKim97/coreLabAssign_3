@@ -543,7 +543,7 @@ function Editor() {
               }}
             >
               <input
-                type="range"                
+                type="range"
                 min={12}
                 max={30}
                 step={1}
@@ -730,8 +730,8 @@ function Editor() {
                     key={i}
                     d={pathGen({ source: link.source, target: link.target })}
                     fill="none"
-                    stroke="#c0c0c0"
-                    strokeWidth={1.5}
+                    stroke="#505050"
+                    strokeWidth={5}
                   />
                 );
               })}
@@ -785,7 +785,7 @@ function NodeCard({
   const HOVER_MAX = 560;
   const base = {
     background: "#fff",
-    borderRadius: 10,
+    borderRadius: 15,
     border: selected ? "1px solid #757575ff" : "1px solid rgba(0, 0, 0, 1)",
     boxShadow: selected
       ? "0 6px 18px rgba(59,130,246,0.25)"
@@ -810,7 +810,7 @@ function NodeCard({
     transform: "translateY(-50%)",
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 0,
     border: "1px solid rgba(0, 0, 0, 1)",
     background: "white",
     cursor: "pointer",
@@ -821,8 +821,8 @@ function NodeCard({
   };
   const closeBtn = {
     position: "absolute",
-    top: 6,
-    right: 6,
+    top: 10,
+    right: 10,
     width: 24,
     height: 24,
     borderRadius: 12,
@@ -862,14 +862,14 @@ function NodeCard({
           font-weight: 700;
           font-size: 14px;
           border: 1px solid #e5e5e5;
-          border-radius: 6px;
+          border-radius: 0px;
           padding: 4px 8px;
-          width: 100%;
+          width: 90%;
           box-sizing: border-box;
         }
         .node-card .text-input {
           border: 1px solid #e5e5e5;
-          border-radius: 6px;
+          border-radius: 0px;
           padding: 6px 8px;
           width: 100%;
           box-sizing: border-box;
